@@ -48,7 +48,8 @@ jobs:
               const moduleName = components.slice(1,-1).join('/').toLowerCase();
               const moduleType = components[0];
 
-              const version = fs.readFileSync(filename, 'utf8');
+              const version = fs.readFileSync(filename, 'utf8').trim();
+              // TODO: Check for empty string and invalid characters
               const tag = `${moduleName}/${version}`.toLowerCase();
 
               core.setOutput(tag, 'tag');
