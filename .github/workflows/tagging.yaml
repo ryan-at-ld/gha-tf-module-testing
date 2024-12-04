@@ -74,6 +74,7 @@ jobs:
             }
       - name: Echo
         run: "echo 'Version ${{ steps.parse-version-file.outputs.version }} of ${{ steps.parse-version-file.outputs.module-type }} module ${{ steps.parse-version-file.outputs.module-name }}. Created by #${{ github.event.number }}'"
+
       - name: Create release
         id: create-release
         uses: actions/github-script@v7
