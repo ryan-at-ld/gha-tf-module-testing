@@ -16,6 +16,9 @@ jobs:
     name: Find modified VERSION files
     outputs:
       matrix: ${{ steps.changed-version-files.outputs.all_changed_files }}
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: Get changed version files
@@ -26,7 +29,16 @@ jobs:
           files: |
             resources/*/VERSION
             services/*/VERSION
-
+      - name: Add pull request comment
+        id: add-pull-request-comment
+        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b #v3.0.1
+        if: github.event.pull_request.state == 'open'
+        with:
+          message: |
+            ${{ steps.changed-version-files.outputs.all_changed_files }}
+          comment-tag: proposed-module-versions
+  
+  
   tag-modules:
     name: Create Git tag for modules with new versions
     runs-on: ubuntu-latest
@@ -84,9 +96,10 @@ jobs:
             const body = `
             Version ${{ steps.parse-version-file.outputs.version }} of ${{ steps.parse-version-file.outputs.module-type }} module [${{ steps.parse-version-file.outputs.module-name }}](${{ steps.parse-version-file.outputs.module-directory }}). 
             
-            To use this version of the module, set the \`source\` argument of the module call to \`${sourceUrl}\`.
+            To use this version of the module, set the \`source\` argument of the module call to the following value.
+            \`${sourceUrl}\`.
             
-            This release was generated for #${{ github.event.number }}'.
+            This release was generated for pull request #${{ github.event.number }}.
             `
             github.rest.repos.createRelease({
               body: body,
