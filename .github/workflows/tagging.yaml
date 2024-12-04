@@ -30,6 +30,8 @@ jobs:
     name: Create Git tag for modules with new versions
     runs-on: ubuntu-latest
     needs: [ modified-version-files ]
+    permissions:
+      contents: write
     strategy:
       matrix:
         files: ${{ fromJSON(needs.modified-version-files.outputs.matrix) }}
@@ -68,8 +70,9 @@ jobs:
                core.setFailed(`Action failed with error ${err}`);
             }
       - name: Create release
-        if: github.event.pull_request.merged == true
+        id: create-release
         uses: actions/github-script@v7
+        if: github.event.pull_request.merged == true
         with:
           script: |
             github.rest.repos.createRelease({
