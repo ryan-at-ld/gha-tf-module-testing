@@ -55,6 +55,7 @@ jobs:
               const components = filename.split('/');
               const moduleType = components[0];
               const moduleName = components.slice(1,-1).join('/').toLowerCase();
+              const moduleDirectory = [moduleType, moduleName].join('/');
             
               core.info(`Parsing version file for ${moduleType} module "${moduleName}"`);
 
