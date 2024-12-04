@@ -8,6 +8,7 @@ on:
       - opened
       - closed
       - reopened
+      - synchronize
 
 jobs:
   modified-version-files:
@@ -79,8 +80,16 @@ jobs:
         if: github.event.pull_request.merged == true
         with:
           script: |
+            const sourceUrl = `git::ssh://git@github.com/${{ github.repository }}//${{ steps.parse-version-file.outputs.module-directory }}?ref=${{ steps.parse-version-file.outputs.tag }}`
+            const body = `
+            Version ${{ steps.parse-version-file.outputs.version }} of ${{ steps.parse-version-file.outputs.module-type }} module [${{ steps.parse-version-file.outputs.module-name }}](${{ steps.parse-version-file.outputs.module-directory }}). 
+            
+            To use this version of the module, set the \`source\` argument of the module call to \`${sourceUrl}\`.
+            
+            This release was generated for #${{ github.event.number }}'.
+            `
             github.rest.repos.createRelease({
-              body: 'Version ${{ steps.parse-version-file.outputs.version }} of ${{ steps.parse-version-file.outputs.module-type }} module ${{ steps.parse-version-file.outputs.module-name }}. Created by #${{ github.event.number }}',
+              body: body,
               name: '${{ steps.parse-version-file.outputs.module-name }} ${{ steps.parse-version-file.outputs.version }}',
               owner: context.repo.owner,
               repo: context.repo.repo,
