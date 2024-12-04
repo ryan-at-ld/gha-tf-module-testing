@@ -16,9 +16,6 @@ jobs:
     name: Find modified VERSION files
     outputs:
       matrix: ${{ steps.changed-version-files.outputs.all_changed_files }}
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - name: Get changed version files
@@ -29,15 +26,6 @@ jobs:
           files: |
             resources/*/VERSION
             services/*/VERSION
-      - name: Add pull request comment
-        id: add-pull-request-comment
-        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b #v3.0.1
-        if: github.event.pull_request.state == 'open'
-        with:
-          message: |
-            ${{ steps.changed-version-files.outputs.all_changed_files }}
-          comment-tag: proposed-module-versions
-  
   
   tag-modules:
     name: Create Git tag for modules with new versions
@@ -45,6 +33,7 @@ jobs:
     needs: [ modified-version-files ]
     permissions:
       contents: write
+      pull-requests: write
     strategy:
       matrix:
         files: ${{ fromJSON(needs.modified-version-files.outputs.matrix) }}
@@ -85,7 +74,14 @@ jobs:
             } catch (err) {
                core.setFailed(`Action failed with error ${err}`);
             }
-
+      - name: Add pull request comment
+        id: add-pull-request-comment
+        uses: thollander/actions-comment-pull-request@24bffb9b452ba05a4f3f77933840a6a841d1b32b #v3.0.1
+        if: github.event.pull_request.state == 'open'
+        with:
+          message: |
+            On merge, the tag `${{ steps.parse-version-file.outputs.version }}` will be created for ${{ steps.parse-version-file.outputs.module-type }} module *${{ steps.parse-version-file.outputs.module-name }}*.
+          comment-tag: "comment-for-file-${{ matrix.files }}"
       - name: Create release
         id: create-release
         uses: actions/github-script@v7
