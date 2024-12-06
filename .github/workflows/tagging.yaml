@@ -1,5 +1,5 @@
-name: Tag New Modules Versions
-run-name: Tagging
+name: Module Versioning
+run-name: Module Versioning
 on:
   pull_request:
     branches:
@@ -10,11 +10,12 @@ on:
       - reopened
       - synchronize
 jobs:
-  modified-version-files:
+  check-version-files:
     runs-on: ubuntu-latest
-    name: Find modified VERSION files
+    name: Find modified VERSION files in the resources and services directories
     outputs:
-      matrix: ${{ steps.changed-version-files.outputs.all_changed_files }}
+      module-directories: ${{ steps.changed-version-files.outputs.all_changed_files }}
+      module-count: ${{ steps.changed-version-files.outputs.all_changed_files_count }}
     steps:
       - uses: actions/checkout@v4
       - name: Get changed version files
@@ -22,81 +23,158 @@ jobs:
         uses: tj-actions/changed-files@4edd678ac3f81e2dc578756871e4d00c19191daf #v45
         with:
           matrix: true
+          dir_names: "true"
           files: |
             resources/*/VERSION
             services/*/VERSION
-  
-  tag-modules:
-    name: Create Git tag for modules with new versions
+
+  new-module-version:
+    name: Release new module versions on merge
     runs-on: ubuntu-latest
-    needs: [ modified-version-files ]
+    needs: [ check-version-files ]
     permissions:
       contents: write
       pull-requests: write
     strategy:
       matrix:
-        file: ${{ fromJSON(needs.modified-version-files.outputs.matrix) }}
-      max-parallel: 2
+        directory: ${{ fromJSON(needs.check-version-files.outputs.module-directories) }}
+      max-parallel: 4
       fail-fast: false
+    # Only run if there are modified version files because GHA will complain if the matrix dimension contains an empty list.
+    if: 0 < fromJSON(needs.check-version-files.outputs.module-count)
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Parse the version file
-        id: parse-version-file
+      - uses: actions/checkout@v4
+      - name: Parse the version files
+        id: parse-version-files
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('node:fs');
+            
+            const moduleDirectory = '${{ matrix.directory }}';
+            const filename = `${ moduleDirectory }/VERSION`;
+            
+            core.info(`Processing file "${filename}".`);
+            
+              try {
+            
+                const components = moduleDirectory.split('/');
+                const moduleType = components[0];
+                const moduleName = components.slice(1).join('/').toLowerCase();
+            
+                core.info(`Parsing version file for ${moduleType} module "${moduleName}"`);
+            
+                const version = fs.readFileSync(filename, 'utf8').trim();
+            
+                core.info(`Validating the contents of ${filename}.`);
+            
+                // https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+                const semverRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
+            
+                if (semverRegex.test(version)) {
+            
+                  core.info("The VERSION file contains a valid semantic version string.");
+                  const tag = `${moduleName}/${version}`.toLowerCase();
+                  core.info(`The "${tag}" tag will be used for the new version of the module.`);
+            
+                  const data = {
+                    "directory": moduleDirectory,
+                    "filename": filename,
+                    "name":  moduleName,
+                    "tag": tag,
+                    "type":  moduleType,
+                    "version": version
+                  };
+            
+                  core.exportVariable('MODULE_VERSION', JSON.stringify(data));
+            
+                } else {
+            
+                  // Add an error for the invalid value and decorate the code in the PR by including an annotation.
+                  core.error("A version file must contain exactly one valid semantic version string as defined at https://semver.org/.", {
+                    title: "Invalid VERSION file",
+                    file: filename,
+                    startLine: 0,
+                    startColumn: 0
+                  });
+            
+                  // Ensure the step fails by using a non-zero return value.
+                  process.exitCode = 1;
+                }
+            
+              } catch (err) {
+                 core.setFailed(err);
+              }
 
+      - name: Check for existing tag
+        id: check-for-existing-tag
+        uses: actions/github-script@v7
+        with:
+          retries: 3
+          script: |
+            const m = JSON.parse(process.env.MODULE_VERSION);
             try {
-
-              const filename = '${{ matrix.file }}';
-              core.info(`Processing file "${filename}".`);
             
-              const components = filename.split('/');
-              const moduleType = components[0];
-              const moduleName = components.slice(1,-1).join('/').toLowerCase();
-              const moduleDirectory = [moduleType, moduleName].join('/');
+             await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${ m.tag }`
+              });
             
-              core.info(`Parsing version file for ${moduleType} module "${moduleName}"`);
-
-              const version = fs.readFileSync(filename, 'utf8').trim();
-              // TODO: Check for empty string and invalid characters
-              const tag = `${moduleName}/${version}`.toLowerCase();
-              core.info(`The "${tag}" tag will be used for the new version of the module.`);
-
-              core.setOutput('module-directory', moduleDirectory);
-              core.setOutput('module-name', moduleName);
-              core.setOutput('module-type', moduleType);
-              core.setOutput('tag', tag);
-              core.setOutput('version', version);
+            
+              const errorMessage = `Version ${m.version} of the ${m.type} module "${m.name}" cannot be created because the Git tag "${ m.tag}" already exists.  Change the contents of the file to a different version if you intend to create a new Git tag.`;
+              // The error method is used instead of setFailed method so that the code can be annotated.
+              core.error(errorMessage, {
+                  title: "Duplicate Git tag",
+                  file: m.filename,
+                  startLine: 0,
+                  startColumn: 0
+              });
+            
+              // Set the exit code to a non-zero value to fail the step.
+              process.exitCode = 1;
             
             } catch (err) {
-               core.setFailed(`Action failed with error ${err}`);
+             if (err.status == 404) {
+              core.info(`The "${m.tag}" Git tag does not exist.  A new Github release and Git tag will be created.`)
+             } else {
+               core.setFailed(err);
+             }
             }
-      # TODO: Check for existing tag
       - name: Create release
         id: create-release
         uses: actions/github-script@v7
-        if: github.event.pull_request.merged == true
         with:
+          retries: '3'
           script: |
-            const sourceUrl = `git::ssh://git@github.com/${{ github.repository }}//${{ steps.parse-version-file.outputs.module-directory }}?ref=${{ steps.parse-version-file.outputs.tag }}`
-            const name = '${{ steps.parse-version-file.outputs.module-name }} ${{ steps.parse-version-file.outputs.version }}'
-            const body = `
-            Version ${{ steps.parse-version-file.outputs.version }} of ${{ steps.parse-version-file.outputs.module-type }} module [${{ steps.parse-version-file.outputs.module-name }}](${{ steps.parse-version-file.outputs.module-directory }}). 
             
+            const m = JSON.parse(process.env.MODULE_VERSION);
+            
+            const sourceUrl = `git::ssh://git@github.com/${{ github.repository }}//${m.directory}?ref=${m.tag}`;
+            const name = m.tag;
+            const tag = m.tag;
+            const body = `
+            Version \`${m.version}\` of ${m.type} module [${m.name}](${m.directory}).
+
             To use this version of the module, set the \`source\` argument of the module call to the following value.
             \`${sourceUrl}\`.
+
+            This release was generated by [run ${{ github.run_number }} of the "${{ github.workflow }}" workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) in response to pull request #${{ github.event.number }}.
+            `;
             
-            This release was generated for pull request #${{ github.event.number }}.
-            `
-            github.rest.repos.createRelease({
-              body: body,
-              name: name,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag_name: '${{ steps.parse-version-file.outputs.tag }}',
-              target_commitish: '${{ github.sha }}'
-            });
+            if (context.payload.pull_request.state == 'closed') {
             
+              await github.rest.repos.createRelease({
+                body: body,
+                name: name,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                target_commitish: '${{ github.sha }}'
+              });
+            
+            } else {
+              core.notice(`The "${name}" Github release and the "${tag}" Git tag will not be created until the pull request has been merged.`);
+              core.info("The following is a preview of the release body.");
+              core.info(body);
+            }
