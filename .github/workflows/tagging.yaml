@@ -151,12 +151,6 @@ jobs:
             
             
             const m = JSON.parse(process.env.MODULE_VERSION);
-            
-            core.info("Creating the Git tag in the local repo.");
-            await exec.exec('git', ['tag', m.tag]);
-            
-            core.info("Pushing the Git tag.");
-            await exec.exec('git', ['push', 'origin', 'tag', m.tag]);
 
             const sourceUrl = `git::ssh://git@github.com/${{ github.repository }}//${m.directory}?ref=${m.tag}`;
             const name = m.tag;
@@ -171,6 +165,13 @@ jobs:
             `;
 
             if (context.payload.pull_request.state == 'closed') {
+            
+              // Create the tag using Git instead of the GitHub API because it is not possible to by-pass GitHub Rulesets with the GHA token.
+              core.info("Creating the Git tag in the local repo.");
+              await exec.exec('git', ['tag', m.tag]);
+            
+              core.info("Pushing the Git tag.");
+              await exec.exec('git', ['push', 'origin', 'tag', m.tag]);
 
               await github.rest.repos.createRelease({
                 body: body,
