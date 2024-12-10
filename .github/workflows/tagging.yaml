@@ -148,8 +148,15 @@ jobs:
         with:
           retries: '3'
           script: |
-
+            
+            
             const m = JSON.parse(process.env.MODULE_VERSION);
+            
+            core.info("Creating the Git tag in the local repo.");
+            await exec.exec('git', ['tag', m.tag]);
+            
+            core.info("Pushing the Git tag.");
+            await exec.exec('git', ['push', 'origin', 'tag', m.tag]);
 
             const sourceUrl = `git::ssh://git@github.com/${{ github.repository }}//${m.directory}?ref=${m.tag}`;
             const name = m.tag;
