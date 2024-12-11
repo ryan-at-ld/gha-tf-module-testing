@@ -46,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ssh-key: ${{ secrets.AUTO_TAGGING_DEPLOY_KEY }}
+          ssh-key: ${{ secrets.GHA_AUTO_TAGGING_DEPLOY_KEY }}
       - name: Parse the version files
         id: parse-version-files
         uses: actions/github-script@v7
