@@ -9,6 +9,8 @@ on:
       - closed
       - reopened
       - synchronize
+    paths:
+      - "**/VERSION"
 jobs:
   check-version-files:
     runs-on: ubuntu-latest
