@@ -30,9 +30,9 @@ jobs:
           matrix: true
           dir_names: "true"
           files: |
-            helpers/*/VERSION
-            resources/*/VERSION
-            services/*/VERSION
+            helpers/**/VERSION
+            resources/**/VERSION
+            services/**/VERSION
 
   new-module-version:
     name: Release new module versions on merge
