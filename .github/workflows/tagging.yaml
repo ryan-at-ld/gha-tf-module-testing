@@ -23,9 +23,6 @@ jobs:
       module-count: ${{ steps.changed-version-files.outputs.all_changed_files_count }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/github-script@v7
-        with:
-          script: console.debug(context);
       - name: Get changed version files
         id: changed-version-files
         uses: tj-actions/changed-files@4edd678ac3f81e2dc578756871e4d00c19191daf #v45
@@ -55,8 +52,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GHA_AUTO_TAGGING_DEPLOY_KEY }}
-      - name: Parse the version files
-        id: parse-version-files
+      - name: Parse the version file
+        id: parse-version-file
         uses: actions/github-script@v7
         with:
           script: |
@@ -117,7 +114,7 @@ jobs:
                  core.setFailed(err);
               }
 
-      - name: Check for existing tag
+      - name: Check for an existing tag
         id: check-for-existing-tag
         uses: actions/github-script@v7
         with:
@@ -152,7 +149,7 @@ jobs:
                core.setFailed(err);
              }
             }
-      - name: Create release
+      - name: Create or preview release
         id: create-release
         uses: actions/github-script@v7
         with:
@@ -193,6 +190,6 @@ jobs:
 
             } else {
               core.notice(`The "${name}" Github release and the "${tag}" Git tag will not be created until the pull request has been merged.`);
-              core.info("The following is a preview of the release body.");
+              core.info("The following is a preview of the release body's markdown.");
               core.info(body);
             }
