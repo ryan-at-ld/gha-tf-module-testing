@@ -10,7 +10,9 @@ on:
       - reopened
       - synchronize
     paths:
-      - "**/VERSION"
+      - "helpers/**/VERSION"
+      - "resources/**/VERSION"
+      - "services/**/VERSION"
 
 jobs:
   check-version-files:
