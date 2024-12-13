@@ -11,8 +11,11 @@ on:
       - synchronize
     paths:
       - "**/VERSION"
+
 jobs:
   check-version-files:
+    # Only run when a PR is open or if it has been closed because it is merged.  Without this check, it will run when the PR is manually closed.
+    if: github.event.pull_request.state == 'open' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     name: Find modified VERSION files in the helpers, resources, and services directories
     outputs:
@@ -20,6 +23,9 @@ jobs:
       module-count: ${{ steps.changed-version-files.outputs.all_changed_files_count }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/github-script@v7
+        with:
+          script: console.debug(context);
       - name: Get changed version files
         id: changed-version-files
         uses: tj-actions/changed-files@4edd678ac3f81e2dc578756871e4d00c19191daf #v45
