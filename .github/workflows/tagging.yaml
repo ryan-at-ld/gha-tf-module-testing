@@ -195,3 +195,30 @@ jobs:
               core.info("The following is a preview of the release body's markdown.");
               core.info(body);
             }
+
+  # The check-job-results job ensures that the previous jobs in this workflow succeeded.  GitHub's branch protection feature and rulesets feature both support
+  # the ability to make GHA jobs (not workflows) required before a PR can be merged.  Unfortunately, the names of the required jobs must be enumerated in the settings.
+  # There is no way to ensure that every workflow job that runs must succeed without naming each one individually.  The limitation makes it impossible to make a
+  # dynamically configured matrix job required.  By making this job both required and dependent on the previous job, it can prevent merges by failing it if any of the
+  # previous jobs did not succeed.
+  check-job-results:
+    needs:
+      - check-version-files
+      - new-module-version
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            console.log(context);
+            const checks = ${{ toJSON(needs) }};
+            for (const [key, value] of Object.entries(checks)) {
+              const result = value.result;
+              if (result != 'success') {
+                core.setFailed(`The required job "${key}" was not successful.  Please check the job logs for more details.`);
+              }
+            }
+            
+            
+      
